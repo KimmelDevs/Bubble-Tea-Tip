@@ -16,14 +16,15 @@ export async function POST(req: NextRequest) {
 
   const type = event?.data?.attributes?.type;
   console.log("📨 Webhook received:", type);
-  console.log("📦 Payload:", JSON.stringify(event?.data?.attributes).slice(0, 200));
 
   if (type === "checkout_session.payment.paid") {
-    const lineItems   = event.data.attributes.data?.attributes?.line_items || [];
+    const attrs       = event.data.attributes.data?.attributes;
+    const lineItems   = attrs?.line_items || [];
     const amountCents = lineItems[0]?.amount || 0;
     const amount      = amountCents / 100;
+    const name        = attrs?.metadata?.tipper_name || "Friend";
 
-    console.log(`💰 Payment confirmed: ₱${amount}`);
+    console.log(`💰 Payment confirmed: ₱${amount} from ${name}`);
 
     try {
       await new Promise<void>((resolve, reject) => {
@@ -40,16 +41,14 @@ export async function POST(req: NextRequest) {
         client.on("connect", () => {
           client.publish(
             MQTT_TOPIC,
-            JSON.stringify({ amount }),
+            JSON.stringify({ amount, name }),
             { qos: 1 },
             (err) => {
               clearTimeout(timer);
               client.end();
-              if (err) {
-                console.error("MQTT publish error:", err);
-                reject(err);
-              } else {
-                console.log(`📡 MQTT published ₱${amount}`);
+              if (err) { reject(err); }
+              else {
+                console.log(`📡 MQTT published ₱${amount} from ${name}`);
                 resolve();
               }
             }

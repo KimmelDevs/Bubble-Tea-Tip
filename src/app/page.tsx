@@ -18,6 +18,7 @@ export default function TipPage() {
   const [loading, setLoading]     = useState<number | null>(null);
   const [error, setError]         = useState<string | null>(null);
   const [tipCount, setTipCount]   = useState(0);
+  const [name, setName]           = useState("");
 
   useEffect(() => {
     const client = mqtt.connect(BROKER_URL, { clean: true });
@@ -29,6 +30,10 @@ export default function TipPage() {
 
   async function sendTip(amount: number) {
     if (loading) return;
+    if (!name.trim()) {
+      setError("Please enter your name first! 😊");
+      return;
+    }
     setError(null);
     setLoading(amount);
 
@@ -36,13 +41,13 @@ export default function TipPage() {
       const res  = await fetch("/api/checkout", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ amount }),
+        body:    JSON.stringify({ amount, name: name.trim() }),
       });
       const data = await res.json();
 
       if (data.checkout_url) {
         setTipCount((c) => c + 1);
-        window.location.href = data.checkout_url; // → PayMongo GCash page
+        window.location.href = data.checkout_url;
       } else {
         throw new Error(data.error || "Failed to create checkout");
       }
@@ -64,7 +69,6 @@ export default function TipPage() {
           --rose-lt: #ff85b3;
           --cream:   #fff5f8;
           --ink:     #1a0a12;
-          --gold:    #f5c842;
           --card-bg: rgba(255,255,255,0.72);
         }
 
@@ -97,7 +101,7 @@ export default function TipPage() {
           display: flex; flex-direction: column;
           align-items: center; justify-content: center;
           padding: 24px 20px 40px;
-          gap: 32px;
+          gap: 24px;
         }
 
         .header { text-align: center; }
@@ -114,7 +118,7 @@ export default function TipPage() {
           0%,100% { box-shadow: 0 8px 32px rgba(255,77,141,0.35); }
           50%      { box-shadow: 0 8px 48px rgba(255,77,141,0.6); }
         }
-        .name {
+        .name-heading {
           font-family: 'Playfair Display', serif;
           font-size: clamp(2rem, 8vw, 3rem);
           font-weight: 900; color: var(--ink);
@@ -124,7 +128,6 @@ export default function TipPage() {
           margin-top: 6px; font-size: 15px; font-weight: 300;
           color: var(--rose); letter-spacing: 0.5px;
         }
-
         .status {
           display: flex; align-items: center; gap: 6px;
           font-size: 12px; color: #888; margin-top: 10px;
@@ -135,6 +138,26 @@ export default function TipPage() {
           background: #ccc; transition: background 0.4s;
         }
         .dot.on { background: #4ade80; box-shadow: 0 0 6px #4ade80; }
+
+        /* Name input */
+        .name-wrap { width: 100%; max-width: 360px; }
+        .name-input {
+          width: 100%;
+          padding: 14px 18px;
+          border-radius: 16px;
+          border: 1.5px solid rgba(255,77,141,0.2);
+          background: white;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 15px;
+          color: var(--ink);
+          outline: none;
+          transition: border 0.2s, box-shadow 0.2s;
+        }
+        .name-input:focus {
+          border-color: var(--rose);
+          box-shadow: 0 0 0 3px rgba(255,77,141,0.1);
+        }
+        .name-input::placeholder { color: #ccc; }
 
         .tip-section { width: 100%; max-width: 360px; }
         .section-label {
@@ -179,16 +202,12 @@ export default function TipPage() {
         .tip-amount span { font-size: 14px; color: var(--rose); }
         .tip-sub { font-size: 12px; color: #b0708a; margin-top: 2px; }
         .tip-arrow { font-size: 18px; color: var(--rose-lt); }
-
-        /* GCash badge */
         .gcash-badge {
           display: inline-flex; align-items: center; gap: 5px;
           background: #0070ba; color: white;
           font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
           padding: 3px 8px; border-radius: 20px; margin-top: 4px;
         }
-
-        /* Loading spinner inside button */
         .spinner {
           width: 18px; height: 18px;
           border: 2px solid rgba(255,77,141,0.2);
@@ -198,44 +217,35 @@ export default function TipPage() {
           flex-shrink: 0;
         }
         @keyframes spin { to { transform: rotate(360deg); } }
-
-        /* Error message */
         .error-box {
           width: 100%; max-width: 360px;
           background: #fff0f0; border: 1px solid #ffc0cb;
           border-radius: 14px; padding: 12px 16px;
           font-size: 13px; color: #c0392b; text-align: center;
         }
-
         .footer {
           font-size: 11px; color: #c0a0b0;
           text-align: center; line-height: 1.8;
         }
       `}</style>
 
-      {/* floating petals */}
       <div className="petals">
         {Array.from({ length: 18 }).map((_, i) => (
-          <div
-            key={i}
-            className="petal"
-            style={{
-              left:              `${(i * 5.7) % 100}%`,
-              background:        i % 2 === 0 ? "#ff4d8d" : "#f5c842",
-              animationDuration: `${6 + (i * 1.3) % 8}s`,
-              animationDelay:    `${(i * 0.7) % 6}s`,
-              width:             `${8 + (i * 3) % 12}px`,
-              height:            `${8 + (i * 3) % 12}px`,
-            }}
-          />
+          <div key={i} className="petal" style={{
+            left:              `${(i * 5.7) % 100}%`,
+            background:        i % 2 === 0 ? "#ff4d8d" : "#f5c842",
+            animationDuration: `${6 + (i * 1.3) % 8}s`,
+            animationDelay:    `${(i * 0.7) % 6}s`,
+            width:             `${8 + (i * 3) % 12}px`,
+            height:            `${8 + (i * 3) % 12}px`,
+          }}/>
         ))}
       </div>
 
       <main className="page">
-        {/* header */}
         <div className="header">
           <div className="avatar">💖</div>
-          <h1 className="name">Tip Us</h1>
+          <h1 className="name-heading">Tip Us</h1>
           <p className="tagline">Scan · Pay via GCash · Spread love 🌸</p>
           <div className="status">
             <div className={`dot ${connected ? "on" : ""}`} />
@@ -243,7 +253,19 @@ export default function TipPage() {
           </div>
         </div>
 
-        {/* tip buttons */}
+        {/* Name input */}
+        <div className="name-wrap">
+          <input
+            className="name-input"
+            type="text"
+            placeholder="Enter your name 😊"
+            value={name}
+            onChange={(e) => { setName(e.target.value); setError(null); }}
+            maxLength={14}
+          />
+        </div>
+
+        {/* Tip buttons */}
         <div className="tip-section">
           <p className="section-label">Choose an amount</p>
           <div className="tip-grid">
@@ -257,9 +279,7 @@ export default function TipPage() {
                 <div className="tip-btn-inner">
                   <div className="tip-emoji">{emoji}</div>
                   <div className="tip-text">
-                    <div className="tip-amount">
-                      <span>₱</span>{amount}
-                    </div>
+                    <div className="tip-amount"><span>₱</span>{amount}</div>
                     <div className="tip-sub">{label}</div>
                     <div className="gcash-badge">💙 GCash</div>
                   </div>
@@ -273,12 +293,8 @@ export default function TipPage() {
           </div>
         </div>
 
-        {/* error */}
-        {error && (
-          <div className="error-box">⚠️ {error}</div>
-        )}
+        {error && <div className="error-box">⚠️ {error}</div>}
 
-        {/* footer */}
         <p className="footer">
           Secured by PayMongo 🇵🇭<br />
           {tipCount > 0 && `${tipCount} tip${tipCount > 1 ? "s" : ""} sent this session ✨`}

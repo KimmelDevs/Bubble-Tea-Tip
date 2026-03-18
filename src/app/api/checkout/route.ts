@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 
 export async function POST(req: NextRequest) {
-  const { amount } = await req.json();
+  const { amount, name } = await req.json();
 
   if (![10, 20, 30].includes(Number(amount))) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
@@ -24,22 +24,24 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         data: {
           attributes: {
-            billing: { name: "Tipper" },
+            billing: { name: name || "Tipper" },
             send_email_receipt: false,
             show_description: true,
             show_line_items: true,
-            payment_method_types: ["gcash"],   // GCash only
+            payment_method_types: ["gcash"],
             line_items: [
               {
                 currency: "PHP",
-                amount:   amount * 100,         // centavos
+                amount:   amount * 100,
                 name:     `Tip ₱${amount} 💖`,
                 quantity: 1,
               },
             ],
-            success_url: `${origin}/success?amount=${amount}`,
+            success_url: `${origin}/success?amount=${amount}&name=${encodeURIComponent(name || "Friend")}`,
             cancel_url:  `${origin}`,
-            description: `Tip ₱${amount} — Salamat!`,
+            description: `Tip ₱${amount} from ${name} — Salamat!`,
+            // Pass name in metadata so webhook can read it
+            metadata: { tipper_name: name || "Friend" },
           },
         },
       }),
