@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import mqtt from "mqtt";
 
-const MQTT_BROKER = "mqtt://broker.hivemq.com";
+const MQTT_BROKER = "mqtts://broker.hivemq.com:8883";  // TLS
 const MQTT_TOPIC  = "bubble/tip";
 
 export async function POST(req: NextRequest) {
@@ -29,8 +29,9 @@ export async function POST(req: NextRequest) {
     try {
       await new Promise<void>((resolve, reject) => {
         const client = mqtt.connect(MQTT_BROKER, {
-          clientId: "vercel_" + Math.random().toString(16).slice(2),
-          clean: true,
+          clientId:             "vercel_" + Math.random().toString(16).slice(2),
+          clean:                true,
+          rejectUnauthorized:   false,   // HiveMQ public broker
         });
 
         const timer = setTimeout(() => {
@@ -46,8 +47,10 @@ export async function POST(req: NextRequest) {
             (err) => {
               clearTimeout(timer);
               client.end();
-              if (err) { reject(err); }
-              else {
+              if (err) {
+                console.error("MQTT publish error:", err);
+                reject(err);
+              } else {
                 console.log(`📡 MQTT published ₱${amount} from ${name}`);
                 resolve();
               }
@@ -58,6 +61,7 @@ export async function POST(req: NextRequest) {
         client.on("error", (err) => {
           clearTimeout(timer);
           client.end(true);
+          console.error("MQTT error:", err.message);
           reject(err);
         });
       });
