@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import crypto from "crypto";
-import mqtt   from "mqtt";
+import mqtt from "mqtt";
 
 const MQTT_BROKER = "mqtt://broker.hivemq.com";
 const MQTT_TOPIC  = "bubble/tip";
@@ -8,8 +8,8 @@ const MQTT_TOPIC  = "bubble/tip";
 export async function POST(req: NextRequest) {
   const rawBody = await req.text();
 
-  // ── Verify PayMongo signature ────────────────────────────────
-  const sigHeader = req.headers.get("paymongo-signature") || "";
+  // ── Verify PayMongo signature ─────────────────────────────
+  const sigHeader    = req.headers.get("paymongo-signature") || "";
   const webhookSecret = process.env.PAYMONGO_WEBHOOK_SECRET;
 
   if (webhookSecret && sigHeader) {
@@ -30,9 +30,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // ── Handle event ─────────────────────────────────────────────
-  const event = JSON.parse(rawBody);
-  const type  = event?.data?.attributes?.type;
+  // ── Parse event ───────────────────────────────────────────
+  let event: any;
+  try {
+    event = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 });
+  }
+
+  const type = event?.data?.attributes?.type;
+  console.log("📨 Webhook received:", type);
 
   if (type === "checkout_session.payment.paid") {
     const lineItems   = event.data.attributes.data?.attributes?.line_items || [];
@@ -41,27 +48,49 @@ export async function POST(req: NextRequest) {
 
     console.log(`💰 GCash payment confirmed: ₱${amount}`);
 
-    // ── Publish to MQTT → ESP32 LCD ──────────────────────────
-    await new Promise<void>((resolve, reject) => {
-      const client = mqtt.connect(MQTT_BROKER);
-      client.on("connect", () => {
-        client.publish(
-          MQTT_TOPIC,
-          JSON.stringify({ amount }),
-          { qos: 1 },
-          (err) => {
-            client.end();
-            if (err) reject(err);
-            else {
-              console.log(`📡 MQTT published ₱${amount} to ${MQTT_TOPIC}`);
-              resolve();
+    // ── Publish to MQTT → ESP32 LCD ───────────────────────
+    try {
+      await new Promise<void>((resolve, reject) => {
+        const client = mqtt.connect(MQTT_BROKER, {
+          clientId: "vercel_webhook_" + Math.random().toString(16).slice(2),
+          clean: true,
+        });
+
+        const timer = setTimeout(() => {
+          client.end(true);
+          reject(new Error("MQTT timeout"));
+        }, 8000);
+
+        client.on("connect", () => {
+          client.publish(
+            MQTT_TOPIC,
+            JSON.stringify({ amount }),
+            { qos: 1 },
+            (err) => {
+              clearTimeout(timer);
+              client.end();
+              if (err) {
+                console.error("MQTT publish error:", err);
+                reject(err);
+              } else {
+                console.log(`📡 MQTT published ₱${amount} to ${MQTT_TOPIC}`);
+                resolve();
+              }
             }
-          }
-        );
+          );
+        });
+
+        client.on("error", (err) => {
+          clearTimeout(timer);
+          client.end(true);
+          console.error("MQTT connection error:", err);
+          reject(err);
+        });
       });
-      client.on("error", (err) => { client.end(); reject(err); });
-      setTimeout(() => { client.end(); reject(new Error("MQTT timeout")); }, 8000);
-    });
+    } catch (err) {
+      console.error("Failed to publish MQTT:", err);
+      // Still return 200 so PayMongo doesn't retry
+    }
   }
 
   return NextResponse.json({ received: true });
