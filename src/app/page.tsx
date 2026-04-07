@@ -12,6 +12,20 @@ const TIPS = [
   { amount: 30, emoji: "💖", label: "Ang bait mo!" },
 ];
 
+const PAYMENT_METHODS = [
+  { id: "gcash",              label: "GCash",        icon: "💙", color: "#0070ba" },
+  { id: "paymaya",            label: "Maya",         icon: "💚", color: "#00a651" },
+  { id: "card",               label: "Credit / Debit Card", icon: "💳", color: "#6366f1" },
+  { id: "grab_pay",           label: "GrabPay",      icon: "🟢", color: "#00b14f" },
+  { id: "qrph",               label: "QR Ph",        icon: "🏦", color: "#c0392b" },
+  { id: "dob",                label: "Online Banking",icon: "🏛️", color: "#2980b9" },
+  { id: "dob_ubp",            label: "UnionBank",    icon: "🔵", color: "#003087" },
+  { id: "billease",           label: "BillEase",     icon: "📱", color: "#f39c12" },
+  { id: "brankas_bdo",        label: "BDO",          icon: "🔴", color: "#e74c3c" },
+  { id: "brankas_landbank",   label: "Landbank",     icon: "🟩", color: "#27ae60" },
+  { id: "brankas_metrobank",  label: "Metrobank",    icon: "🟠", color: "#e67e22" },
+];
+
 export default function TipPage() {
   const clientRef                 = useRef<mqtt.MqttClient | null>(null);
   const [connected, setConnected] = useState(false);
@@ -202,12 +216,21 @@ export default function TipPage() {
         .tip-amount span { font-size: 14px; color: var(--rose); }
         .tip-sub { font-size: 12px; color: #b0708a; margin-top: 2px; }
         .tip-arrow { font-size: 18px; color: var(--rose-lt); }
-        .gcash-badge {
-          display: inline-flex; align-items: center; gap: 5px;
-          background: #0070ba; color: white;
-          font-size: 10px; font-weight: 600; letter-spacing: 0.5px;
-          padding: 3px 8px; border-radius: 20px; margin-top: 4px;
+
+        /* Payment methods section */
+        .payment-section { width: 100%; max-width: 360px; }
+        .payment-grid {
+          display: flex; flex-wrap: wrap; gap: 8px;
+          justify-content: center;
         }
+        .payment-badge {
+          display: inline-flex; align-items: center; gap: 5px;
+          color: white;
+          font-size: 10px; font-weight: 600; letter-spacing: 0.4px;
+          padding: 4px 10px; border-radius: 20px;
+          white-space: nowrap;
+        }
+
         .spinner {
           width: 18px; height: 18px;
           border: 2px solid rgba(255,77,141,0.2);
@@ -246,7 +269,7 @@ export default function TipPage() {
         <div className="header">
           <div className="avatar">💖</div>
           <h1 className="name-heading">Tip Us</h1>
-          <p className="tagline">Scan · Pay via GCash · Spread love 🌸</p>
+          <p className="tagline">Scan · Pay your way · Spread love 🌸</p>
           <div className="status">
             <div className={`dot ${connected ? "on" : ""}`} />
             <span>{connected ? "Ready to receive tips" : "Connecting…"}</span>
@@ -281,7 +304,6 @@ export default function TipPage() {
                   <div className="tip-text">
                     <div className="tip-amount"><span>₱</span>{amount}</div>
                     <div className="tip-sub">{label}</div>
-                    <div className="gcash-badge">💙 GCash</div>
                   </div>
                   {loading === amount
                     ? <div className="spinner" />
@@ -294,6 +316,22 @@ export default function TipPage() {
         </div>
 
         {error && <div className="error-box">⚠️ {error}</div>}
+
+        {/* Payment methods */}
+        <div className="payment-section">
+          <p className="section-label">Accepted payment methods</p>
+          <div className="payment-grid">
+            {PAYMENT_METHODS.map(({ id, label, icon, color }) => (
+              <span
+                key={id}
+                className="payment-badge"
+                style={{ background: color }}
+              >
+                {icon} {label}
+              </span>
+            ))}
+          </div>
+        </div>
 
         <p className="footer">
           Secured by PayMongo 🇵🇭<br />
