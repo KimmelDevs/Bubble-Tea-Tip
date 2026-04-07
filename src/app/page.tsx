@@ -33,6 +33,7 @@ export default function TipPage() {
   const [error, setError]         = useState<string | null>(null);
   const [tipCount, setTipCount]   = useState(0);
   const [name, setName]           = useState("");
+  const [email, setEmail]         = useState("");
 
   useEffect(() => {
     const client = mqtt.connect(BROKER_URL, { clean: true });
@@ -44,10 +45,6 @@ export default function TipPage() {
 
   async function sendTip(amount: number) {
     if (loading) return;
-    if (!name.trim()) {
-      setError("Please enter your name first! 😊");
-      return;
-    }
     setError(null);
     setLoading(amount);
 
@@ -55,7 +52,7 @@ export default function TipPage() {
       const res  = await fetch("/api/checkout", {
         method:  "POST",
         headers: { "Content-Type": "application/json" },
-        body:    JSON.stringify({ amount, name: name.trim() }),
+        body:    JSON.stringify({ amount, name: name.trim(), email: email.trim() }),
       });
       const data = await res.json();
 
@@ -276,15 +273,23 @@ export default function TipPage() {
           </div>
         </div>
 
-        {/* Name input */}
+        {/* Name & Email inputs */}
         <div className="name-wrap">
           <input
             className="name-input"
             type="text"
-            placeholder="Enter your name 😊"
+            placeholder="Your name (optional) 😊"
             value={name}
             onChange={(e) => { setName(e.target.value); setError(null); }}
-            maxLength={14}
+            maxLength={40}
+          />
+          <input
+            className="name-input"
+            type="email"
+            placeholder="Your email (optional) 📧"
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setError(null); }}
+            style={{ marginTop: "10px" }}
           />
         </div>
 

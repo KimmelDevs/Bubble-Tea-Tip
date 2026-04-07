@@ -1,7 +1,22 @@
 import { NextRequest, NextResponse } from "next/server";
 
+// All payment methods supported by PayMongo checkout sessions
+const SUPPORTED_PAYMENT_METHODS = [
+  "gcash",
+  "paymaya",
+  "card",
+  "grab_pay",
+  "brankas_bdo",
+  "brankas_landbank",
+  "brankas_metrobank",
+  "dob",
+  "dob_ubp",
+  "billease",
+  "qrph",
+];
+
 export async function POST(req: NextRequest) {
-  const { amount, name } = await req.json();
+  const { amount, name, email } = await req.json();
 
   if (![10, 20, 30].includes(Number(amount))) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
@@ -24,11 +39,14 @@ export async function POST(req: NextRequest) {
       body: JSON.stringify({
         data: {
           attributes: {
-            billing: { name: name || "Tipper" },
+            billing: {
+                name:  name  || "Anonymous",
+                ...(email ? { email } : {}),
+              },
             send_email_receipt: false,
             show_description: true,
             show_line_items: true,
-            payment_method_types: ["gcash"],
+            payment_method_types: SUPPORTED_PAYMENT_METHODS,
             line_items: [
               {
                 currency: "PHP",
@@ -39,9 +57,8 @@ export async function POST(req: NextRequest) {
             ],
             success_url: `${origin}/success?amount=${amount}&name=${encodeURIComponent(name || "Friend")}`,
             cancel_url:  `${origin}`,
-            description: `Tip ₱${amount} from ${name} — Salamat!`,
-            // Pass name in metadata so webhook can read it
-            metadata: { tipper_name: name || "Friend" },
+            description: `Tip ₱${amount} from ${name || "Anonymous"} — Salamat!`,
+            metadata: { tipper_name: name || "Anonymous", tipper_email: email || "" },
           },
         },
       }),
