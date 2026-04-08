@@ -16,7 +16,7 @@ const SUPPORTED_PAYMENT_METHODS = [
 ];
 
 export async function POST(req: NextRequest) {
-  const { amount, name, email } = await req.json();
+  const { amount, name, email, phone } = await req.json(); // 👈 added phone
 
   if (![10, 20, 30].includes(Number(amount))) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
@@ -40,9 +40,10 @@ export async function POST(req: NextRequest) {
         data: {
           attributes: {
             billing: {
-                name:  name  || "Anonymous",
-                ...(email ? { email } : {}),
-              },
+              name:  name || "Anonymous",
+              ...(email ? { email } : {}), // for card payments
+              ...(phone ? { phone } : {}), // for GCash / Maya / GrabPay etc.
+            },
             send_email_receipt: false,
             show_description: true,
             show_line_items: true,
@@ -58,7 +59,11 @@ export async function POST(req: NextRequest) {
             success_url: `${origin}/success?amount=${amount}&name=${encodeURIComponent(name || "Friend")}`,
             cancel_url:  `${origin}`,
             description: `Tip ₱${amount} from ${name || "Anonymous"} — Salamat!`,
-            metadata: { tipper_name: name || "Anonymous", tipper_email: email || "" },
+            metadata: {
+              tipper_name:  name  || "Anonymous",
+              tipper_email: email || "",
+              tipper_phone: phone || "", // 👈 added
+            },
           },
         },
       }),
