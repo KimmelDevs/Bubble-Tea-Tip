@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 
-// All payment methods supported by PayMongo checkout sessions
 const SUPPORTED_PAYMENT_METHODS = [
   "gcash",
   "paymaya",
@@ -16,7 +15,7 @@ const SUPPORTED_PAYMENT_METHODS = [
 ];
 
 export async function POST(req: NextRequest) {
-  const { amount, name, email, phone } = await req.json(); // 👈 added phone
+  const { amount, name, phone } = await req.json(); // email removed from billing
 
   if (![10, 20, 30].includes(Number(amount))) {
     return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
@@ -41,8 +40,7 @@ export async function POST(req: NextRequest) {
           attributes: {
             billing: {
               name:  name || "Anonymous",
-              ...(email ? { email } : {}), // for card payments
-              ...(phone ? { phone } : {}), // for GCash / Maya / GrabPay etc.
+              ...(phone ? { phone } : {}), // 👈 only phone, PayMongo collects email itself
             },
             send_email_receipt: false,
             show_description: true,
@@ -61,8 +59,7 @@ export async function POST(req: NextRequest) {
             description: `Tip ₱${amount} from ${name || "Anonymous"} — Salamat!`,
             metadata: {
               tipper_name:  name  || "Anonymous",
-              tipper_email: email || "",
-              tipper_phone: phone || "", // 👈 added
+              tipper_phone: phone || "",
             },
           },
         },
