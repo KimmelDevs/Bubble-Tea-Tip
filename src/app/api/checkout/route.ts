@@ -14,53 +14,8 @@ const SUPPORTED_PAYMENT_METHODS = [
   "qrph",
 ];
 
-// ---------- HMAC helpers ----------
-async function importKey(secret: string) {
-  return crypto.subtle.importKey(
-    "raw",
-    new TextEncoder().encode(secret),
-    { name: "HMAC", hash: "SHA-256" },
-    false,
-    ["sign", "verify"]
-  );
-}
-
-async function verifySignature(body: string, timestamp: string, receivedSig: string): Promise<boolean> {
-  const secret = process.env.CHECKOUT_HMAC_SECRET;
-  if (!secret) throw new Error("CHECKOUT_HMAC_SECRET env var not set");
-
-  // Reject requests older than 5 minutes (replay protection)
-  const ts = Number(timestamp);
-  if (!ts || Math.abs(Date.now() - ts) > 5 * 60 * 1000) return false;
-
-  const key      = await importKey(secret);
-  const message  = `${timestamp}.${body}`;
-  const sigBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-  const expected = Array.from(new Uint8Array(sigBytes))
-    .map(b => b.toString(16).padStart(2, "0"))
-    .join("");
-
-  // Constant-time compare
-  if (expected.length !== receivedSig.length) return false;
-  let diff = 0;
-  for (let i = 0; i < expected.length; i++) {
-    diff |= expected.charCodeAt(i) ^ receivedSig.charCodeAt(i);
-  }
-  return diff === 0;
-}
-
-// ---------- Route ----------
 export async function POST(req: NextRequest) {
-  const rawBody   = await req.text();
-  const timestamp = req.headers.get("x-tip-timestamp") ?? "";
-  const signature = req.headers.get("x-tip-signature") ?? "";
-
-  const valid = await verifySignature(rawBody, timestamp, signature).catch(() => false);
-  if (!valid) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const { amount, name, phone } = JSON.parse(rawBody);
+  const { amount, name, phone } = await req.json();
 
   const numAmount = Number(amount);
   if (!numAmount || numAmount < 1 || !Number.isFinite(numAmount)) {
@@ -85,7 +40,7 @@ export async function POST(req: NextRequest) {
         data: {
           attributes: {
             billing: {
-              name:  name || "Anonymous",
+              name: name || "Anonymous",
               ...(phone ? { phone } : {}),
             },
             send_email_receipt: false,
