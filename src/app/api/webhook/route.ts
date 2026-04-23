@@ -63,9 +63,6 @@ export async function POST(req: NextRequest) {
   // PayMongo checkout session events
   // type is on body.data.attributes.type
   // payment data is on body.data.attributes.data.attributes
-  const attrs = body?.data?.attributes?.data?.attributes;
-
-  // Handle both possible event type strings PayMongo may send
   const isPaid =
     eventType === "checkout_session.payment.paid" ||
     eventType === "payment.paid"                  ||
@@ -76,14 +73,16 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ received: true });
   }
 
-  if (!attrs) {
-    console.error("[webhook] No attributes found in payload. Full body:", JSON.stringify(body));
+  const sessionAttrs = body?.data?.attributes?.data?.attributes;
+  if (!sessionAttrs) {
+    console.error("[webhook] No session attributes found");
     return NextResponse.json({ received: true });
   }
 
-  // Amount is in centavos
-  const amount = (attrs.amount ?? 0) / 100;
-  const name   = attrs.billing?.name ?? attrs.metadata?.tipper_name ?? "Friend";
+  // Amount lives in the payments array, in centavos
+  const payment = sessionAttrs?.payments?.[0]?.attributes;
+  const amount  = (payment?.amount ?? sessionAttrs?.line_items?.[0]?.amount ?? 0) / 100;
+  const name    = payment?.billing?.name ?? sessionAttrs?.metadata?.tipper_name ?? "Friend";
 
   console.log(`[webhook] ✅ Payment confirmed: ₱${amount} from ${name}`);
 
