@@ -34,6 +34,7 @@ export default function TipPage() {
   const [tipCount, setTipCount]   = useState(0);
   const [name, setName]           = useState("");
   const [email, setEmail]         = useState("");
+  const [customAmount, setCustomAmount] = useState("");
 
   useEffect(() => {
     const client = mqtt.connect(BROKER_URL, { clean: true });
@@ -170,6 +171,45 @@ export default function TipPage() {
         }
         .name-input::placeholder { color: #ccc; }
 
+
+        .custom-amount-wrap {
+          display: flex; gap: 10px; align-items: stretch;
+          margin-top: 12px;
+        }
+        .custom-amount-input {
+          flex: 1;
+          padding: 14px 18px;
+          border-radius: 16px;
+          border: 1.5px solid rgba(255,77,141,0.2);
+          background: white;
+          font-family: 'DM Sans', sans-serif;
+          font-size: 18px; font-weight: 500;
+          color: var(--ink);
+          outline: none;
+          transition: border 0.2s, box-shadow 0.2s;
+        }
+        .custom-amount-input:focus {
+          border-color: var(--rose);
+          box-shadow: 0 0 0 3px rgba(255,77,141,0.1);
+        }
+        .custom-amount-input::placeholder { color: #ccc; font-size: 14px; }
+        .custom-send-btn {
+          padding: 14px 22px;
+          border-radius: 16px;
+          border: none; cursor: pointer;
+          background: linear-gradient(135deg, var(--rose-lt), var(--rose));
+          color: white; font-size: 20px;
+          box-shadow: 0 4px 16px rgba(255,77,141,0.3);
+          transition: transform 0.15s, box-shadow 0.15s;
+          display: grid; place-items: center;
+        }
+        .custom-send-btn:hover:not(:disabled) {
+          transform: translateY(-2px);
+          box-shadow: 0 8px 24px rgba(255,77,141,0.4);
+        }
+        .custom-send-btn:active:not(:disabled) { transform: scale(0.96); }
+        .custom-send-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
         .tip-section { width: 100%; max-width: 360px; }
         .section-label {
           font-size: 11px; font-weight: 500; letter-spacing: 2px;
@@ -295,7 +335,7 @@ export default function TipPage() {
 
         {/* Tip buttons */}
         <div className="tip-section">
-          <p className="section-label">Choose an amount</p>
+          <p className="section-label">Quick pick</p>
           <div className="tip-grid">
             {TIPS.map(({ amount, emoji, label }) => (
               <button
@@ -317,6 +357,38 @@ export default function TipPage() {
                 </div>
               </button>
             ))}
+          </div>
+
+          <p className="section-label" style={{ marginTop: "20px" }}>Or enter any amount</p>
+          <div className="custom-amount-wrap">
+            <input
+              className="custom-amount-input"
+              type="number"
+              min="1"
+              step="1"
+              placeholder="₱ Enter amount…"
+              value={customAmount}
+              disabled={!!loading}
+              onChange={(e) => { setCustomAmount(e.target.value); setError(null); }}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  const val = parseFloat(customAmount);
+                  if (val >= 1) sendTip(val);
+                }
+              }}
+            />
+            <button
+              className="custom-send-btn"
+              disabled={!!loading || !customAmount || parseFloat(customAmount) < 1}
+              onClick={() => {
+                const val = parseFloat(customAmount);
+                if (val >= 1) sendTip(val);
+              }}
+            >
+              {loading && !TIPS.find(t => t.amount === loading)
+                ? <div className="spinner" style={{ borderTopColor: "white", borderColor: "rgba(255,255,255,0.3)" }} />
+                : "→"}
+            </button>
           </div>
         </div>
 

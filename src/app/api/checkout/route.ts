@@ -17,8 +17,9 @@ const SUPPORTED_PAYMENT_METHODS = [
 export async function POST(req: NextRequest) {
   const { amount, name, phone } = await req.json(); // email removed from billing
 
-  if (![10, 20, 30].includes(Number(amount))) {
-    return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+  const numAmount = Number(amount);
+  if (!numAmount || numAmount < 1 || !Number.isFinite(numAmount)) {
+    return NextResponse.json({ error: "Invalid amount. Minimum tip is ₱1." }, { status: 400 });
   }
 
   const origin =
