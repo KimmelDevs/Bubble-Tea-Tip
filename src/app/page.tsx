@@ -5,8 +5,6 @@ import mqtt from "mqtt";
 
 const BROKER_URL = "wss://broker.hivemq.com:8884/mqtt";
 const TOPIC      = "bubble/tip";
-const HMAC_SECRET = process.env.NEXT_PUBLIC_CHECKOUT_HMAC_SECRET ?? "";
-
 const TIPS = [
   { amount: 10, emoji: "☕", label: "Maliit na tulong" },
   { amount: 20, emoji: "🌸", label: "Salamat!" },
@@ -45,39 +43,16 @@ export default function TipPage() {
     return () => { client.end(); };
   }, []);
 
-  async function signBody(body: string, timestamp: string): Promise<string> {
-    const key = await crypto.subtle.importKey(
-      "raw",
-      new TextEncoder().encode(HMAC_SECRET),
-      { name: "HMAC", hash: "SHA-256" },
-      false,
-      ["sign"]
-    );
-    const message  = `${timestamp}.${body}`;
-    const sigBytes = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(message));
-    return Array.from(new Uint8Array(sigBytes))
-      .map(b => b.toString(16).padStart(2, "0"))
-      .join("");
-  }
-
   async function sendTip(amount: number) {
     if (loading) return;
     setError(null);
     setLoading(amount);
 
     try {
-      const timestamp = String(Date.now());
-      const bodyStr   = JSON.stringify({ amount, name: name.trim(), email: email.trim() });
-      const signature = await signBody(bodyStr, timestamp);
-
       const res  = await fetch("/api/checkout", {
         method:  "POST",
-        headers: {
-          "Content-Type":    "application/json",
-          "x-tip-timestamp": timestamp,
-          "x-tip-signature": signature,
-        },
-        body: bodyStr,
+        headers: { "Content-Type": "application/json" },
+        body:    JSON.stringify({ amount, name: name.trim(), email: email.trim() }),
       });
       const data = await res.json();
 

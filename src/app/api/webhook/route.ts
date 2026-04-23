@@ -1,81 +1,64 @@
 import { NextRequest, NextResponse } from "next/server";
+import * as mqtt from "mqtt";
 
-// All payment methods supported by PayMongo checkout sessions
-const SUPPORTED_PAYMENT_METHODS = [
-  "gcash",
-  "paymaya",
-  "card",
-  "grab_pay",
-  "brankas_bdo",
-  "brankas_landbank",
-  "brankas_metrobank",
-  "dob",
-  "dob_ubp",
-  "billease",
-  "qrph",
-];
+// ── HMAC helper ───────────────────────────────────────────────
+async function signMqttPayload(message: string): Promise<string> {
+  const secret = process.env.MQTT_HMAC_SECRET;
+  if (!secret) throw new Error("MQTT_HMAC_SECRET is not set");
 
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(secret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"]
+  );
+  const sigBytes = await crypto.subtle.sign(
+    "HMAC", key, new TextEncoder().encode(message)
+  );
+  return Array.from(new Uint8Array(sigBytes))
+    .map(b => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+// ── PayMongo webhook ──────────────────────────────────────────
 export async function POST(req: NextRequest) {
-  const { amount, name } = await req.json();
+  const body = await req.json();
 
-  if (![10, 20, 30].includes(Number(amount))) {
-    return NextResponse.json({ error: "Invalid amount" }, { status: 400 });
+  // PayMongo sends event type in data.attributes.type
+  const type       = body?.data?.attributes?.type;
+  const attributes = body?.data?.attributes?.data?.attributes;
+
+  if (type !== "payment.paid" || !attributes) {
+    return NextResponse.json({ received: true });
   }
 
-  const origin =
-    req.headers.get("origin") ||
-    process.env.NEXT_PUBLIC_BASE_URL ||
-    "http://localhost:3000";
+  const amount    = (attributes.amount ?? 0) / 100;           // convert centavos → pesos
+  const name      = attributes.billing?.name ?? "Friend";
+  const timestamp = String(Date.now());
 
-  try {
-    const response = await fetch("https://api.paymongo.com/v1/checkout_sessions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Basic ${Buffer.from(
-          process.env.PAYMONGO_SECRET_KEY + ":"
-        ).toString("base64")}`,
-      },
-      body: JSON.stringify({
-        data: {
-          attributes: {
-            billing: { name: name || "Tipper" },
-            send_email_receipt: false,
-            show_description: true,
-            show_line_items: true,
-            payment_method_types: SUPPORTED_PAYMENT_METHODS,
-            line_items: [
-              {
-                currency: "PHP",
-                amount:   amount * 100,
-                name:     `Tip ₱${amount} 💖`,
-                quantity: 1,
-              },
-            ],
-            success_url: `${origin}/success?amount=${amount}&name=${encodeURIComponent(name || "Friend")}`,
-            cancel_url:  `${origin}`,
-            description: `Tip ₱${amount} from ${name} — Salamat!`,
-            metadata: { tipper_name: name || "Friend" },
-          },
-        },
-      }),
+  // Build signed MQTT payload
+  const message   = `${amount}|${name}|${timestamp}`;
+  const sig       = await signMqttPayload(message);
+
+  const payload   = JSON.stringify({ amount, name, timestamp, sig });
+
+  // Publish to HiveMQ over TLS
+  await new Promise<void>((resolve, reject) => {
+    const client = mqtt.connect("mqtts://broker.hivemq.com:8883", {
+      clientId: `server-${Date.now()}`,
+      clean: true,
     });
+    client.on("connect", () => {
+      client.publish("bubble/tip", payload, { qos: 1 }, (err) => {
+        client.end();
+        err ? reject(err) : resolve();
+      });
+    });
+    client.on("error", reject);
+    setTimeout(() => reject(new Error("MQTT timeout")), 8000);
+  });
 
-    const data = await response.json();
-
-    if (!response.ok) {
-      console.error("PayMongo error:", data);
-      return NextResponse.json(
-        { error: data?.errors?.[0]?.detail || "PayMongo error" },
-        { status: 500 }
-      );
-    }
-
-    const checkoutUrl = data.data.attributes.checkout_url;
-    return NextResponse.json({ checkout_url: checkoutUrl });
-
-  } catch (err: any) {
-    console.error("Server error:", err);
-    return NextResponse.json({ error: err.message }, { status: 500 });
-  }
+  console.log(`[webhook] Published tip ₱${amount} from ${name}`);
+  return NextResponse.json({ received: true });
 }
