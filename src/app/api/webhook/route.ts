@@ -21,44 +21,79 @@ async function signMqttPayload(message: string): Promise<string> {
     .join("");
 }
 
-// ── PayMongo webhook ──────────────────────────────────────────
-export async function POST(req: NextRequest) {
-  const body = await req.json();
-
-  // PayMongo sends event type in data.attributes.type
-  const type       = body?.data?.attributes?.type;
-  const attributes = body?.data?.attributes?.data?.attributes;
-
-  if (type !== "payment.paid" || !attributes) {
-    return NextResponse.json({ received: true });
-  }
-
-  const amount    = (attributes.amount ?? 0) / 100;           // convert centavos → pesos
-  const name      = attributes.billing?.name ?? "Friend";
+// ── MQTT publish ──────────────────────────────────────────────
+async function publishTip(amount: number, name: string) {
   const timestamp = String(Date.now());
-
-  // Build signed MQTT payload
   const message   = `${amount}|${name}|${timestamp}`;
   const sig       = await signMqttPayload(message);
-
   const payload   = JSON.stringify({ amount, name, timestamp, sig });
 
-  // Publish to HiveMQ over TLS
+  console.log("[webhook] Publishing MQTT payload:", payload);
+
   await new Promise<void>((resolve, reject) => {
     const client = mqtt.connect("mqtts://broker.hivemq.com:8883", {
       clientId: `server-${Date.now()}`,
       clean: true,
     });
     client.on("connect", () => {
+      console.log("[webhook] MQTT connected, publishing...");
       client.publish("bubble/tip", payload, { qos: 1 }, (err) => {
         client.end();
         err ? reject(err) : resolve();
       });
     });
-    client.on("error", reject);
-    setTimeout(() => reject(new Error("MQTT timeout")), 8000);
+    client.on("error", (err) => {
+      console.error("[webhook] MQTT error:", err);
+      reject(err);
+    });
+    setTimeout(() => reject(new Error("MQTT connect timeout")), 8000);
   });
+}
 
-  console.log(`[webhook] Published tip ₱${amount} from ${name}`);
+// ── PayMongo webhook ──────────────────────────────────────────
+export async function POST(req: NextRequest) {
+  const body = await req.json();
+
+  // Log the full event so we can see exactly what PayMongo sends
+  console.log("[webhook] Received event:", JSON.stringify(body, null, 2));
+
+  const eventType = body?.data?.attributes?.type;
+  console.log("[webhook] Event type:", eventType);
+
+  // PayMongo checkout session events
+  // type is on body.data.attributes.type
+  // payment data is on body.data.attributes.data.attributes
+  const attrs = body?.data?.attributes?.data?.attributes;
+
+  // Handle both possible event type strings PayMongo may send
+  const isPaid =
+    eventType === "checkout_session.payment.paid" ||
+    eventType === "payment.paid"                  ||
+    eventType === "checkout_session.completed";
+
+  if (!isPaid) {
+    console.log("[webhook] Ignoring event type:", eventType);
+    return NextResponse.json({ received: true });
+  }
+
+  if (!attrs) {
+    console.error("[webhook] No attributes found in payload. Full body:", JSON.stringify(body));
+    return NextResponse.json({ received: true });
+  }
+
+  // Amount is in centavos
+  const amount = (attrs.amount ?? 0) / 100;
+  const name   = attrs.billing?.name ?? attrs.metadata?.tipper_name ?? "Friend";
+
+  console.log(`[webhook] ✅ Payment confirmed: ₱${amount} from ${name}`);
+
+  try {
+    await publishTip(amount, name);
+    console.log(`[webhook] ✅ MQTT published successfully`);
+  } catch (err) {
+    console.error("[webhook] ❌ MQTT publish failed:", err);
+    // Still return 200 so PayMongo doesn't retry
+  }
+
   return NextResponse.json({ received: true });
 }
